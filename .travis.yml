@@ -1,0 +1,12 @@
+language: go
+go_import_path: github.com/boyvinall/hydra-idp-form
+go:
+  - 1.6
+
+install:
+  - sudo add-apt-repository ppa:masterminds/glide -y && sudo apt-get update
+  - sudo apt-get install glide
+  - glide install
+
+script:
+  - go build github.com/boyvinall/hydra-idp-form
