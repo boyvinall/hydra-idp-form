@@ -38,14 +38,34 @@ const (
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<form method="post">
+<form method="post" action="{{.SubmitURI}}">
     <p>username <input type="text" name="username"></p>
     <p>password <input type="password" name="password" autocomplete="off"></p>
     <input type="submit" name="result" value="login">
-    <input type="submit" name="result" value="register">
+    <a href="{{.RegisterURI}}">Register</a>
 </form>
 <hr>
-{{.}}
+{{.Msg}}
+
+</body>
+</html>
+`
+
+	registerform = `<html>
+<head>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<h1>Register</h1>
+<form method="post">
+    <p>username <input type="text" name="username"></p>
+    <p>password <input type="password" name="password" autocomplete="off"></p>
+    <p>confirm password <input type="password" name="confirm"  autocomplete="off"></p>
+    <input type="submit">
+    <a href="{{.CancelURI}}">Cancel</a>
+</form>
+<hr>
+{{.Msg}}
 
 </body>
 </html>
@@ -134,6 +154,7 @@ func main() {
 		Provider:       provider,
 		CookieProvider: cookieProvider,
 		ConsentForm:    consent,
+		RegisterForm:   registerform,
 		StaticFiles:    *staticFiles,
 	})
 
