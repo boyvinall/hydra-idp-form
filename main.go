@@ -4,12 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"text/template"
 	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/janekolszak/idp/core"
-	"github.com/janekolszak/idp/helpers"
 	"github.com/janekolszak/idp/providers/cookie"
 	"github.com/janekolszak/idp/providers/form"
 	"github.com/janekolszak/idp/userdb/memory"
@@ -18,153 +16,55 @@ import (
 )
 
 const (
-	consent = `<html><head></head><body>
+	consent = `<html>
+<head>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
 <p>User:        {{.User}} </p>
 <p>Client Name: {{.Client.Name}} </p>
 <p>Scopes:      {{range .Scopes}} {{.}} {{end}} </p>
 <p>Do you agree to grant access to those scopes? </p>
-<p>
-    <form method="post">
-        <input type="submit" name="answer" value="y">
-        <input type="submit" name="answer" value="n">
-    </form>
-</p>
-</body></html>
+<p><form method="post">
+    <input type="submit" name="result" value="ok">
+    <input type="submit" name="result" value="cancel">
+</form></p>
+</body>
+</html>
 `
 
-	loginform = `
-<html>
+	loginform = `<html>
 <head>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <form method="post">
-username <input type="text" name="username"><br>
-password <input type="password" name="password" autocomplete="off"><br>
-<input type="submit">
+    <p>username <input type="text" name="username"></p>
+    <p>password <input type="password" name="password" autocomplete="off"></p>
+    <input type="submit" name="result" value="login">
+    <input type="submit" name="result" value="register">
+</form>
 <hr>
 {{.}}
 
-<body>
+</body>
 </html>
 `
 )
 
 var (
-	idp            *core.IDP
-	provider       core.Provider
-	cookieProvider *cookie.CookieAuth
-
-	// Command line options
-	// clientID     = flag.String("id", "someid", "OAuth2 client ID of the IdP")
-	// clientSecret = flag.String("secret", "somesecret", "OAuth2 client secret")
-	hydraURL     = flag.String("hydra", "https://hydra:4444", "Hydra's URL")
-	configPath   = flag.String("conf", ".hydra.yml", "Path to Hydra's configuration")
+	hydraURL     = flag.String("hydra", "https://localhost:4444", "Hydra's URL")
 	htpasswdPath = flag.String("htpasswd", "/etc/idp/htpasswd", "Path to credentials in htpasswd format")
 	cookieDBPath = flag.String("cookie-db", "/etc/idp/remember.db3", "Path to a database with remember me cookies")
+	clientID     = flag.String("client-id", "", "used to connect to hydra")
+	clientSecret = flag.String("client-secret", "", "used to connect to hydra")
+	staticFiles  = flag.String("static", "", "directory to serve as /static (for CSS/JS/images etc)")
 )
-
-func HandleChallengeGET() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		fmt.Println("Challenge!")
-
-		selector, user, err := cookieProvider.Check(r)
-		if err == nil {
-			fmt.Println("Authenticated with Cookie")
-			err = cookieProvider.UpdateCookie(w, r, selector, user)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-		} else {
-			// Can't authenticate with "Remember Me" cookie,
-			// so try with another provider:
-			user, err = provider.Check(r)
-			if err != nil {
-				// Authentication failed, or any other error
-				fmt.Println(err.Error())
-				provider.WriteError(w, r, err)
-				return
-			}
-			fmt.Println("Authenticated with Form Auth")
-
-			// Save the RememberMe cookie
-			err = cookieProvider.SetCookie(w, r, user)
-			if err != nil {
-				fmt.Println(err.Error())
-			}
-		}
-
-		challenge, err := idp.NewChallenge(r, user)
-		if err != nil {
-			fmt.Println(err.Error())
-			provider.WriteError(w, r, err)
-			return
-		}
-
-		err = challenge.Save(w, r)
-		if err != nil {
-			fmt.Println(err.Error())
-			provider.WriteError(w, r, err)
-			return
-		}
-
-		http.Redirect(w, r, "/consent", http.StatusFound)
-	}
-}
-
-func HandleConsentGET() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		challenge, err := idp.GetChallenge(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		fmt.Println("Data ", challenge.User)
-
-		t := template.Must(template.New("tmpl").Parse(consent))
-
-		t.Execute(w, challenge)
-	}
-}
-
-func HandleConsentPOST() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
-		fmt.Println("Consent POST!")
-		challenge, err := idp.GetChallenge(r)
-		if err != nil {
-			fmt.Println(err.Error())
-			provider.WriteError(w, r, err)
-			return
-		}
-
-		answer := r.FormValue("answer")
-		fmt.Println("Answer: ", answer)
-
-		if answer != "y" {
-			// No challenge token
-			// TODO: Handle negative answer
-			challenge.RefuseAccess(w, r)
-			return
-		}
-
-		err = challenge.GrantAccessToAll(w, r)
-		if err != nil {
-			// Server error
-			fmt.Println(err.Error())
-			provider.WriteError(w, r, err)
-			return
-		}
-	}
-}
 
 func main() {
 	fmt.Println("Identity Provider started!")
 
 	flag.Parse()
-	// Read the configuration file
-	hydraConfig := helpers.NewHydraConfig(*configPath)
 
 	// Setup the providers
 	userdb, err := memory.NewMemStore()
@@ -177,21 +77,25 @@ func main() {
 		panic(err)
 	}
 
-	provider, err = form.NewFormAuth(form.Config{
+	provider, err := form.NewFormAuth(form.Config{
 		LoginForm:          loginform,
 		LoginUsernameField: "username",
 		LoginPasswordField: "password",
 
-		// Validation options:
-		MinUsernameLength: 1,
-		MaxUsernameLength: 100,
-		MinPasswordLength: 1,
-		MaxPasswordLength: 100,
-		UsernamePattern:   ".*",
-		PasswordPattern:   ".*",
-
 		// Store for
 		UserStore: userdb,
+
+		// Validation options:
+		Username: form.Complexity{
+			MinLength: 1,
+			MaxLength: 100,
+			Patterns:  []string{".*"},
+		},
+		Password: form.Complexity{
+			MinLength: 1,
+			MaxLength: 100,
+			Patterns:  []string{".*"},
+		},
 	})
 	if err != nil {
 		panic(err)
@@ -202,24 +106,22 @@ func main() {
 		panic(err)
 	}
 
-	cookieProvider = &cookie.CookieAuth{
+	cookieProvider := &cookie.CookieAuth{
 		Store:  dbCookieStore,
 		MaxAge: time.Minute * 1,
 	}
 
-	config := core.IDPConfig{
+	idp := core.NewIDP(&core.IDPConfig{
 		ClusterURL:            *hydraURL,
-		ClientID:              hydraConfig.ClientID,
-		ClientSecret:          hydraConfig.ClientSecret,
+		ClientID:              *clientID,
+		ClientSecret:          *clientSecret,
 		KeyCacheExpiration:    10 * time.Minute,
 		ClientCacheExpiration: 10 * time.Minute,
 		CacheCleanupInterval:  30 * time.Second,
 
 		// TODO: [IMPORTANT] Don't use CookieStore here
 		ChallengeStore: sessions.NewCookieStore([]byte("something-very-secret")),
-	}
-
-	idp = core.NewIDP(&config)
+	})
 
 	// Connect with Hydra
 	err = idp.Connect()
@@ -227,11 +129,16 @@ func main() {
 		panic(err)
 	}
 
+	handler, err := CreateHandler(HandlerConfig{
+		IDP:            idp,
+		Provider:       provider,
+		CookieProvider: cookieProvider,
+		ConsentForm:    consent,
+		StaticFiles:    *staticFiles,
+	})
+
 	router := httprouter.New()
-	router.GET("/", HandleChallengeGET())
-	router.POST("/", HandleChallengeGET())
-	router.GET("/consent", HandleConsentGET())
-	router.POST("/consent", HandleConsentPOST())
+	handler.Attach(router)
 	http.ListenAndServe(":3000", router)
 
 	idp.Close()

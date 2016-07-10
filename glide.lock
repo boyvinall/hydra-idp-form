@@ -43,7 +43,9 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/janekolszak/idp
-  version: cf29eaca6378f69122fe5ff43719528cc33526a3
+  repo: git@github.com:boyvinall/idp.git
+  vcs: git
+  version: 65a6ab6bfde8fe8dfb5969475df3a0ff1ebe1c2f
   subpackages:
   - core
   - helpers
