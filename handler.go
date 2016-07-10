@@ -51,91 +51,83 @@ func CreateHandler(config HandlerConfig) (*IdpHandler, error) {
 }
 
 func (h *IdpHandler) Attach(router *httprouter.Router) {
-	router.GET("/", h.HandleChallenge())
-	router.POST("/", h.HandleChallenge())
-	router.GET("/cancel", h.HandleCancel())
-	router.POST("/cancel", h.HandleCancel())
-	router.GET("/consent", h.HandleConsentGET())
-	router.POST("/consent", h.HandleConsentPOST())
-	router.GET("/register", h.HandleRegisterGET())
-	router.POST("/register", h.HandleRegisterPOST())
+	router.GET("/", h.HandleChallenge)
+	router.POST("/", h.HandleChallenge)
+	router.GET("/cancel", h.HandleCancel)
+	router.POST("/cancel", h.HandleCancel)
+	router.GET("/consent", h.HandleConsentGET)
+	router.POST("/consent", h.HandleConsentPOST)
+	router.GET("/register", h.HandleRegisterGET)
+	router.POST("/register", h.HandleRegisterPOST)
 	if h.StaticFiles != "" {
 		router.ServeFiles("/static/*filepath", http.Dir(h.StaticFiles))
 	}
 }
 
-func (h *IdpHandler) HandleCancel() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		challenge, err := h.IDP.GetChallenge(r)
-		if err != nil {
-			h.Provider.WriteError(w, r, err)
-			return
-		}
+func (h *IdpHandler) HandleCancel(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	challenge, err := h.IDP.GetChallenge(r)
+	if err != nil {
+		h.Provider.WriteError(w, r, err)
+		return
+	}
+	// TODO: cleanup any cookies etc
+	challenge.RefuseAccess(w, r)
+	return
+}
 
-		challenge.RefuseAccess(w, r)
+func (h *IdpHandler) HandleRegisterGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	query := url.Values{}
+	query["challenge"] = []string{r.URL.Query().Get("challenge")}
+	context := RegisterContext{
+		Msg:       r.FormValue("msg"),
+		CancelURI: fmt.Sprintf("/cancel?%s", query.Encode()),
+	}
+
+	err := h.registerTemplate.Execute(w, context)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func (h *IdpHandler) HandleRegisterGET() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		query := url.Values{}
-		query["challenge"] = []string{r.URL.Query().Get("challenge")}
-		context := RegisterContext{
-			Msg:       r.FormValue("msg"),
-			CancelURI: fmt.Sprintf("/cancel?%s", query.Encode()),
-		}
+func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	query := url.Values{}
+	query["challenge"] = []string{r.URL.Query().Get("challenge")}
 
-		err := h.registerTemplate.Execute(w, context)
+	password := r.FormValue("password")
+	confirm := r.FormValue("confirm")
+	if password != confirm {
+		query["msg"] = []string{"Passwords do not match"}
+		http.Redirect(w, r, fmt.Sprintf("/register?%s", query.Encode()), http.StatusFound)
+		return
+	}
+	username := r.FormValue("username")
+	// TODO: does the user already exist?
+	// TODO: store the user
+	h.RedirectConsent(w, r, username, true)
+}
+
+func (h *IdpHandler) HandleChallenge(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	saveCookie := true
+	selector, user, err := h.CookieProvider.Check(r)
+	if err == nil {
+		err = h.CookieProvider.UpdateCookie(w, r, selector, user)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-	}
-}
-
-func (h *IdpHandler) HandleRegisterPOST() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		query := url.Values{}
-		query["challenge"] = []string{r.URL.Query().Get("challenge")}
-
-		password := r.FormValue("password")
-		confirm := r.FormValue("confirm")
-		if password != confirm {
-			query["msg"] = []string{"Passwords do not match"}
-			http.Redirect(w, r, fmt.Sprintf("/register?%s", query.Encode()), http.StatusFound)
+		saveCookie = false
+	} else {
+		// Can't authenticate with "Remember Me" cookie,
+		// so try with another provider:
+		user, err = h.Provider.Check(r)
+		if err != nil {
+			// for "form" provider GET, this just displays the form
+			h.Provider.WriteError(w, r, err)
 			return
 		}
-		username := r.FormValue("username")
-		// TODO: does the user already exist?
-		// TODO: store the user
-		h.RedirectConsent(w, r, username, true)
-	}
-}
 
-func (h *IdpHandler) HandleChallenge() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		saveCookie := true
-		selector, user, err := h.CookieProvider.Check(r)
-		if err == nil {
-			err = h.CookieProvider.UpdateCookie(w, r, selector, user)
-			if err != nil {
-				return
-			}
-			saveCookie = false
-		} else {
-			// Can't authenticate with "Remember Me" cookie,
-			// so try with another provider:
-			user, err = h.Provider.Check(r)
-			if err != nil {
-				// for "form" provider GET, this just displays the form
-				h.Provider.WriteError(w, r, err)
-				return
-			}
-
-		}
-		h.RedirectConsent(w, r, user, saveCookie)
 	}
+	h.RedirectConsent(w, r, user, saveCookie)
 }
 
 func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
@@ -164,44 +156,40 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 	http.Redirect(w, r, "/consent", http.StatusFound)
 }
 
-func (h *IdpHandler) HandleConsentGET() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		challenge, err := h.IDP.GetChallenge(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+func (h *IdpHandler) HandleConsentGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	challenge, err := h.IDP.GetChallenge(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		err = h.consentTemplate.Execute(w, challenge)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	err = h.consentTemplate.Execute(w, challenge)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
-func (h *IdpHandler) HandleConsentPOST() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (h *IdpHandler) HandleConsentPOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
-		challenge, err := h.IDP.GetChallenge(r)
-		if err != nil {
-			h.Provider.WriteError(w, r, err)
-			return
-		}
+	challenge, err := h.IDP.GetChallenge(r)
+	if err != nil {
+		h.Provider.WriteError(w, r, err)
+		return
+	}
 
-		answer := r.FormValue("result")
-		if answer != "ok" {
-			// No challenge token
-			// TODO: Handle negative answer
-			challenge.RefuseAccess(w, r)
-			return
-		}
+	answer := r.FormValue("result")
+	if answer != "ok" {
+		// No challenge token
+		// TODO: Handle negative answer
+		challenge.RefuseAccess(w, r)
+		return
+	}
 
-		err = challenge.GrantAccessToAll(w, r)
-		if err != nil {
-			// Server error
-			h.Provider.WriteError(w, r, err)
-			return
-		}
+	err = challenge.GrantAccessToAll(w, r)
+	if err != nil {
+		// Server error
+		h.Provider.WriteError(w, r, err)
+		return
 	}
 }
