@@ -42,9 +42,11 @@ func CreateHandler(config HandlerConfig) (*IdpHandler, error) {
 		return nil, err
 	}
 
-	h.registerTemplate, err = template.New("register").Parse(h.RegisterForm)
-	if err != nil {
-		return nil, err
+	if h.RegisterForm != "" {
+		h.registerTemplate, err = template.New("register").Parse(h.RegisterForm)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &h, nil
@@ -57,8 +59,10 @@ func (h *IdpHandler) Attach(router *httprouter.Router) {
 	router.POST("/cancel", h.HandleCancel)
 	router.GET("/consent", h.HandleConsentGET)
 	router.POST("/consent", h.HandleConsentPOST)
-	router.GET("/register", h.HandleRegisterGET)
-	router.POST("/register", h.HandleRegisterPOST)
+	if h.RegisterForm != "" {
+		router.GET("/register", h.HandleRegisterGET)
+	}
+	router.POST("/register", h.HandleRegisterPOST) // can be posted from "register" form on "login" page
 	if h.StaticFiles != "" {
 		router.ServeFiles("/static/*filepath", http.Dir(h.StaticFiles))
 	}
@@ -113,6 +117,7 @@ func (h *IdpHandler) HandleChallenge(w http.ResponseWriter, r *http.Request, _ h
 	if err == nil {
 		err = h.CookieProvider.UpdateCookie(w, r, selector, user)
 		if err != nil {
+			fmt.Println("cookie error")
 			return
 		}
 		saveCookie = false
@@ -122,7 +127,10 @@ func (h *IdpHandler) HandleChallenge(w http.ResponseWriter, r *http.Request, _ h
 		user, err = h.Provider.Check(r)
 		if err != nil {
 			// for "form" provider GET, this just displays the form
-			h.Provider.WriteError(w, r, err)
+			err = h.Provider.WriteError(w, r, err)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 			return
 		}
 
