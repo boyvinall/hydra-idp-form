@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gorilla/sessions"
@@ -79,8 +81,6 @@ func main() {
 			panic(err)
 		}
 		loginform = string(buf)
-		fmt.Println(string(buf))
-		fmt.Println(loginform)
 	}
 
 	if *consentFile != "" {
@@ -129,10 +129,18 @@ func main() {
 		panic(err)
 	}
 
-	dbCookieStore, err := cookie.NewDBStore("sqlite3", *cookieDBPath)
+	u, err := url.Parse(*cookieDBPath)
 	if err != nil {
 		panic(err)
 	}
+	if u.Scheme != "rethinkdb" {
+		panic("cookiedb must be rethinkdb")
+	}
+	dbCookieStore, err := cookie.NewRethinkDBStore(u.Host, strings.TrimLeft(u.Path, "/"))
+	if err != nil {
+		panic(err)
+	}
+	defer dbCookieStore.Close()
 
 	cookieProvider := &cookie.CookieAuth{
 		Store:  dbCookieStore,
