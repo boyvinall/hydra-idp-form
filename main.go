@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const (
+var (
 	consent = `<html>
 <head>
     <link rel="stylesheet" href="/static/style.css">
@@ -64,12 +65,31 @@ var (
 	clientID     = flag.String("client-id", "", "used to connect to hydra")
 	clientSecret = flag.String("client-secret", "", "used to connect to hydra")
 	staticFiles  = flag.String("static", "", "directory to serve as /static (for CSS/JS/images etc)")
+	loginFile    = flag.String("login", "", "template to present for the login page")
+	consentFile  = flag.String("consent", "", "template to present for the consent page")
 )
 
 func main() {
+	flag.Parse()
 	fmt.Println("Identity Provider started!")
 
-	flag.Parse()
+	if *loginFile != "" {
+		buf, err := ioutil.ReadFile(*loginFile)
+		if err != nil {
+			panic(err)
+		}
+		loginform = string(buf)
+		fmt.Println(string(buf))
+		fmt.Println(loginform)
+	}
+
+	if *consentFile != "" {
+		buf, err := ioutil.ReadFile(*consentFile)
+		if err != nil {
+			panic(err)
+		}
+		consent = string(buf)
+	}
 
 	// Setup the providers
 	userdb, err := memory.NewMemStore()
