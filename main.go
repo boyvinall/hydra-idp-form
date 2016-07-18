@@ -83,9 +83,12 @@ func main() {
 	}
 
 	provider, err := form.NewFormAuth(form.Config{
-		LoginForm:          loginform,
-		LoginUsernameField: "username",
-		LoginPasswordField: "password",
+		LoginForm:                    loginform,
+		LoginUsernameField:           "username",
+		LoginPasswordField:           "password",
+		RegisterUsernameField:        "username",
+		RegisterPasswordField:        "password",
+		RegisterPasswordConfirmField: "confirm",
 
 		// Store for
 		UserStore: userdb,

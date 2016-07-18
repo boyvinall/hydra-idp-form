@@ -95,19 +95,27 @@ func (h *IdpHandler) HandleRegisterGET(w http.ResponseWriter, r *http.Request, _
 }
 
 func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	query := url.Values{}
-	query["challenge"] = []string{r.URL.Query().Get("challenge")}
+	username, err := h.Provider.Register(r)
+	if err != nil {
+		query := url.Values{}
+		query["challenge"] = []string{r.URL.Query().Get("challenge")}
+		switch err {
 
-	password := r.FormValue("password")
-	confirm := r.FormValue("confirm")
-	if password != confirm {
-		query["msg"] = []string{"Passwords do not match"}
-		http.Redirect(w, r, fmt.Sprintf("/register?%s", query.Encode()), http.StatusFound)
-		return
+		case core.ErrorPasswordMismatch:
+			query["msg"] = []string{"Passwords do not match"}
+
+		case core.ErrorComplexityFailed:
+			query["msg"] = []string{"Username/password does not meet required complexity"}
+
+		case core.ErrorUserAlreadyExists:
+			query["msg"] = []string{"user already exists"}
+
+		default:
+			// 	query["msg"] = []string{err.Error()}
+		}
+		http.Redirect(w, r, fmt.Sprintf("/?%s", query.Encode()), http.StatusFound)
 	}
-	username := r.FormValue("username")
-	// TODO: does the user already exist?
-	// TODO: store the user
+
 	h.RedirectConsent(w, r, username, true)
 }
 
