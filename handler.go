@@ -146,8 +146,29 @@ func (h *IdpHandler) HandleChallenge(w http.ResponseWriter, r *http.Request, _ h
 	h.RedirectConsent(w, r, user, saveCookie)
 }
 
+// RedirectConsent may optionally skip the consent page if the clientID is trusted
 func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 	user string, saveCookie bool) {
+
+	challenge, err := h.IDP.NewChallenge(r, user)
+	if err != nil {
+		h.Provider.WriteError(w, r, err)
+		return
+	}
+
+	// fmt.Printf("clientID %s\n", challenge.Client.GetID())
+	trustedClient := true // TODO: detect based on client ID
+
+	if trustedClient {
+
+		err = challenge.GrantAccessToAll(w, r)
+		if err != nil {
+			// Server error
+			h.Provider.WriteError(w, r, err)
+			return
+		}
+		return
+	}
 
 	if saveCookie {
 		// Save the RememberMe cookie
@@ -155,12 +176,6 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 		if err != nil {
 			fmt.Println(err.Error())
 		}
-	}
-
-	challenge, err := h.IDP.NewChallenge(r, user)
-	if err != nil {
-		h.Provider.WriteError(w, r, err)
-		return
 	}
 
 	err = challenge.Save(w, r)
