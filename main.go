@@ -15,7 +15,6 @@ import (
 	"github.com/janekolszak/idp/providers/form"
 	"github.com/janekolszak/idp/userdb/memory"
 	"github.com/julienschmidt/httprouter"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
