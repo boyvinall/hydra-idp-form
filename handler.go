@@ -53,8 +53,8 @@ func CreateHandler(config HandlerConfig) (*IdpHandler, error) {
 }
 
 func (h *IdpHandler) Attach(router *httprouter.Router) {
-	router.GET("/", h.HandleChallenge)
-	router.POST("/", h.HandleChallenge)
+	router.GET("/", h.HandleChallengeGET)
+	router.POST("/", h.HandleChallengePOST)
 	router.GET("/cancel", h.HandleCancel)
 	router.POST("/cancel", h.HandleCancel)
 	router.GET("/consent", h.HandleConsentGET)
@@ -114,12 +114,18 @@ func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, 
 			// 	query["msg"] = []string{err.Error()}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/?%s", query.Encode()), http.StatusFound)
+		return
 	}
 
 	h.RedirectConsent(w, r, username, true)
 }
 
-func (h *IdpHandler) HandleChallenge(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (h *IdpHandler) HandleChallengeGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// for "form" provider GET, this just displays the form
+	h.Provider.WriteError(w, r, nil)
+}
+
+func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	saveCookie := true
 	selector, user, err := h.CookieProvider.Check(r)
 	if err == nil {
@@ -141,7 +147,6 @@ func (h *IdpHandler) HandleChallenge(w http.ResponseWriter, r *http.Request, _ h
 			}
 			return
 		}
-
 	}
 	h.RedirectConsent(w, r, user, saveCookie)
 }

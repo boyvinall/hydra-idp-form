@@ -6,9 +6,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/sessions"
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
@@ -101,11 +103,24 @@ func main() {
 		panic(err)
 	}
 
+	usernameRegex := os.Getenv("USERNAME_REGEX")
+	if usernameRegex == "" {
+		usernameRegex = govalidator.Email
+	}
+
+	passwordRegex := os.Getenv("PASSWORD_REGEX")
+	if passwordRegex == "" {
+		// Must contain at least one number and one uppercase and lowercase letter, and at least 8 or more characters
+		//passwordRegex = `(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}`
+
+		passwordRegex = `(.){8,}`
+	}
+
 	provider, err := form.NewFormAuth(form.Config{
 		LoginForm:                    loginform,
-		LoginUsernameField:           "username",
+		LoginUsernameField:           "email",
 		LoginPasswordField:           "password",
-		RegisterUsernameField:        "username",
+		RegisterUsernameField:        "email",
 		RegisterPasswordField:        "password",
 		RegisterPasswordConfirmField: "confirm",
 
@@ -116,12 +131,12 @@ func main() {
 		Username: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
-			Patterns:  []string{".*"},
+			Patterns:  []string{usernameRegex},
 		},
 		Password: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
-			Patterns:  []string{".*"},
+			Patterns:  []string{passwordRegex},
 		},
 	})
 	if err != nil {
