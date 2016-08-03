@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -52,6 +53,16 @@ func CreateHandler(config HandlerConfig) (*IdpHandler, error) {
 	return &h, nil
 }
 
+func (h *IdpHandler) LogRequest(r *http.Request, status string) {
+	log.Printf(`%s (%s) %s "%s" "%s" "%s"`,
+		r.RemoteAddr,
+		r.Header.Get("X-Forwarded-For"),
+		r.Method,
+		r.URL.Path,
+		status,
+		r.UserAgent())
+}
+
 func (h *IdpHandler) Attach(router *httprouter.Router) {
 	router.GET("/", h.HandleChallengeGET)
 	router.POST("/", h.HandleChallengePOST)
@@ -99,6 +110,8 @@ func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		query := url.Values{}
 		query["challenge"] = []string{r.URL.Query().Get("challenge")}
+		h.LogRequest(r, fmt.Sprintf("Provider.Register(): %s", err.Error()))
+
 		switch err {
 
 		case core.ErrorPasswordMismatch:
@@ -117,11 +130,13 @@ func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	h.LogRequest(r, "Provider.Register(): OK")
 	h.RedirectConsent(w, r, username, true)
 }
 
 func (h *IdpHandler) HandleChallengeGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// for "form" provider GET, this just displays the form
+	h.LogRequest(r, "HandleChallengeGET(): OK")
 	h.Provider.WriteError(w, r, nil)
 }
 
@@ -131,9 +146,10 @@ func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request,
 	if err == nil {
 		err = h.CookieProvider.UpdateCookie(w, r, selector, user)
 		if err != nil {
-			fmt.Println("cookie error")
+			h.LogRequest(r, fmt.Sprintf("UpdateCookie(): %s", err.Error()))
 			return
 		}
+		h.LogRequest(r, "UpdateCookie(): OK")
 		saveCookie = false
 	} else {
 		// Can't authenticate with "Remember Me" cookie,
@@ -143,10 +159,11 @@ func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request,
 			// for "form" provider GET, this just displays the form
 			err = h.Provider.WriteError(w, r, err)
 			if err != nil {
-				fmt.Println(err.Error())
+				h.LogRequest(r, err.Error())
 			}
 			return
 		}
+		h.LogRequest(r, "Provider.Check(): OK")
 	}
 	h.RedirectConsent(w, r, user, saveCookie)
 }
@@ -157,6 +174,7 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 
 	challenge, err := h.IDP.NewChallenge(r, user)
 	if err != nil {
+		h.LogRequest(r, fmt.Sprintf("NewChallenge(): %s", err.Error()))
 		h.Provider.WriteError(w, r, err)
 		return
 	}
@@ -169,9 +187,11 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 		err = challenge.GrantAccessToAll(w, r)
 		if err != nil {
 			// Server error
+			h.LogRequest(r, fmt.Sprintf("GrantAccessToAll(): %s", err.Error()))
 			h.Provider.WriteError(w, r, err)
 			return
 		}
+		h.LogRequest(r, "GrantAccessToAll(): OK")
 		return
 	}
 
@@ -179,16 +199,18 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 		// Save the RememberMe cookie
 		err := h.CookieProvider.SetCookie(w, r, user)
 		if err != nil {
-			fmt.Println(err.Error())
+			h.LogRequest(r, fmt.Sprintf("error setting cookie: %s", err.Error()))
 		}
 	}
 
 	err = challenge.Save(w, r)
 	if err != nil {
+		h.LogRequest(r, fmt.Sprintf("error saving challenge: %s", err.Error()))
 		h.Provider.WriteError(w, r, err)
 		return
 	}
 
+	h.LogRequest(r, "OK, consent")
 	http.Redirect(w, r, "/consent", http.StatusFound)
 }
 
