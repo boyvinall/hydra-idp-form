@@ -3,6 +3,8 @@ import:
 - package: github.com/gorilla/sessions
 - package: github.com/janekolszak/idp
   version: master
+  vcs: git
+  repo: git@github.com:boyvinall/idp
   subpackages:
   - core
   - helpers

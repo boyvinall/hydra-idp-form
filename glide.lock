@@ -1,5 +1,5 @@
 hash: a220230f3d9a12c4364a65ad4c2d3e00deaf42ae997672733b8e7d5f0bb73d6b
-updated: 2016-07-18T22:57:36.00876989+01:00
+updated: 2016-08-07T21:35:26.78961164+01:00
 imports:
 - name: github.com/asaskevich/govalidator
   version: 7664702784775e51966f0885f5cd27435916517b
@@ -23,6 +23,8 @@ imports:
   - proto
 - name: github.com/gorilla/context
   version: aed02d124ae4a0e94fea4541c8effd05bf0c8296
+- name: github.com/gorilla/schema
+  version: d68043406bea8bd90f7b38e9c54fab18d903ea25
 - name: github.com/gorilla/securecookie
   version: ff356348f74133a59d3e93aa24b5b4551b6fe90d
 - name: github.com/gorilla/sessions
@@ -43,7 +45,9 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/janekolszak/idp
-  version: 2baa34d9e0729f9b70563a4b9c7939387982ee0b
+  vcs: git
+  repo: git@github.com:boyvinall/idp
+  version: a18485cdb392b6e7e640d7c3fff371035199491d
   subpackages:
   - core
   - helpers
@@ -61,6 +65,8 @@ imports:
   version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/moul/http2curl
   version: b1479103caacaa39319f75e7f57fc545287fca0d
+- name: github.com/nu7hatch/gouuid
+  version: 179d4d0c4d8d407a32af483c2354df1d2c91e6c3
 - name: github.com/oleiade/reflections
   version: 632977f98cd34d217c4b57d0840ec188b3d3dcaf
 - name: github.com/ory-am/common
@@ -163,6 +169,8 @@ imports:
   - internal/datastore
   - internal/log
   - internal/remote_api
+- name: gopkg.in/alexcesaro/quotedprintable.v3
+  version: 2caba252f4dc53eaf6b553000885530023f54623
 - name: gopkg.in/dancannon/gorethink.v2
   version: 61cfdef59cb67a9bf9ab2311bd5eb69e132b6bf4
   subpackages:
@@ -173,6 +181,8 @@ imports:
   version: 268038b363c7a8d7306b8e35bf77a1fde4b0c402
 - name: gopkg.in/fatih/pool.v2
   version: cba550ebf9bce999a02e963296d4bc7a486cb715
+- name: gopkg.in/gomail.v2
+  version: 81ebce5c23dfd25c6c67194b37d3dd3f338c98b1
 - name: gopkg.in/yaml.v2
   version: a83829b6f1293c91addabc89d0571c246397bbf4
-devImports: []
+testImports: []

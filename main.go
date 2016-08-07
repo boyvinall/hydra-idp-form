@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/boyvinall/hydra-idp-form/providers/form"
+
 	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/sessions"
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
-	"github.com/janekolszak/idp/providers/form"
+	// "github.com/janekolszak/idp/providers/form"
 	"github.com/janekolszak/idp/userdb/memory"
 	"github.com/julienschmidt/httprouter"
 )
