@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"golang.org/x/net/context"
+
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
 	"github.com/julienschmidt/httprouter"
@@ -70,6 +72,7 @@ func (h *IdpHandler) Attach(router *httprouter.Router) {
 	router.POST("/cancel", h.HandleCancel)
 	router.GET("/consent", h.HandleConsentGET)
 	router.POST("/consent", h.HandleConsentPOST)
+	router.GET("/userinfo/:token", h.HandleUserinfoGET)
 	if h.RegisterForm != "" {
 		router.GET("/register", h.HandleRegisterGET)
 	}
@@ -250,4 +253,35 @@ func (h *IdpHandler) HandleConsentPOST(w http.ResponseWriter, r *http.Request, _
 		h.Provider.WriteError(w, r, err)
 		return
 	}
+}
+
+func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+	token := ps.ByName("token")
+	ctx := context.Background()
+	wardenctx, err := h.IDP.WardenAuthorized(ctx, token, "openid")
+	if err != nil {
+		h.LogRequest(r, fmt.Sprintf("fail: %s", err.Error()))
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	h.LogRequest(r, r.URL.RawQuery)
+
+	// type Context struct {
+	// 	Subject       string    `json:"sub"`
+	// 	GrantedScopes []string  `json:"scopes"`
+	// 	Issuer        string    `json:"iss"`
+	// 	Audience      string    `json:"aud"`
+	// 	IssuedAt      time.Time `json:"iat"`
+	// 	ExpiresAt     time.Time `json:"exp"`
+	// }
+
+	w.Header().Set("Content-Type", "application/json")
+
+	email := wardenctx.Subject
+	id = email // temporary....
+	name = ""
+	username = ""
+	fmt.Fprintf(w, `{"id": "%s", "email":"%s", "name": "%s", "username": "%s"}`, email, email, name, username)
 }

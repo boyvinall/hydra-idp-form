@@ -76,7 +76,7 @@ imports:
   - pkg
   - compiler
 - name: github.com/ory-am/fosite
-  version: 4d0a5450dd3b44e44f5169f90b3591566a6eef1d
+  version: 6c40c086a1f082d466bac21721571558c32de97c
   subpackages:
   - hash
   - handler/core/strategy
@@ -91,7 +91,7 @@ imports:
   - token/hmac
   - rand
 - name: github.com/ory-am/hydra
-  version: 1e48e1819672fada95d8b24251d12cd883ba61fc
+  version: 0195703e1ac603effae19e7c7738b182b0abda2d
   subpackages:
   - client
   - jwk
