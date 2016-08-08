@@ -101,9 +101,11 @@ func run(c *Config) {
 		panic(err)
 	}
 
-	err = userdb.LoadHtpasswd(c.htpasswdPath)
-	if err != nil {
-		panic(err)
+	if c.htpasswdPath != "" {
+		err = userdb.LoadHtpasswd(c.htpasswdPath)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	if c.emailRegex == "" {
@@ -202,13 +204,13 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:   "htpasswd",
-			Value:  "/etc/idp/htpasswd",
+			Value:  "",
 			Usage:  "Path to credentials in htpasswd format",
 			EnvVar: "HTPASSWD_FILE",
 		},
 		cli.StringFlag{
 			Name:   "cookie-db",
-			Value:  "rethinkdb://localhost:28015",
+			Value:  "rethinkdb://localhost:28015/idp_cookies",
 			Usage:  "Where are the cookies stored?",
 			EnvVar: "COOKIEDB_URL",
 		},
