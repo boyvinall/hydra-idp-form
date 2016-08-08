@@ -280,8 +280,8 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, p
 	w.Header().Set("Content-Type", "application/json")
 
 	email := wardenctx.Subject
-	id = email // temporary....
-	name = ""
-	username = ""
-	fmt.Fprintf(w, `{"id": "%s", "email":"%s", "name": "%s", "username": "%s"}`, email, email, name, username)
+	id := email // temporary....
+	name := ""
+	username := ""
+	fmt.Fprintf(w, `{"id": "%s", "email":"%s", "name": "%s", "username": "%s"}`, id, email, name, username)
 }

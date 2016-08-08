@@ -47,7 +47,7 @@ imports:
 - name: github.com/janekolszak/idp
   vcs: git
   repo: git@github.com:boyvinall/idp
-  version: a18485cdb392b6e7e640d7c3fff371035199491d
+  version: a3cc9acfd9de571d2143f9ceee273e924dc85e13
   subpackages:
   - core
   - helpers
