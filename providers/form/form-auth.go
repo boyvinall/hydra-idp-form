@@ -131,6 +131,8 @@ func (f *FormAuth) WriteError(w http.ResponseWriter, r *http.Request, err error)
 		default:
 			context.Msg = "An error occurred"
 		}
+	} else {
+		context.Msg = r.URL.Query().Get("msg")
 	}
 	t := template.Must(template.New("tmpl").Parse(f.LoginForm))
 	return t.Execute(w, context)
