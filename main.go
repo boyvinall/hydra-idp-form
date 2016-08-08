@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"github.com/boyvinall/hydra-idp-form/providers/form"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/codegangsta/cli"
 	"github.com/gorilla/sessions"
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
@@ -63,31 +63,32 @@ var (
 </html>`
 )
 
-var (
-	hydraURL     = flag.String("hydra", "https://localhost:4444", "Hydra's URL")
-	htpasswdPath = flag.String("htpasswd", "/etc/idp/htpasswd", "Path to credentials in htpasswd format")
-	cookieDBPath = flag.String("cookie-db", "/etc/idp/remember.db3", "Path to a database with remember me cookies")
-	clientID     = flag.String("client-id", "", "used to connect to hydra")
-	clientSecret = flag.String("client-secret", "", "used to connect to hydra")
-	staticFiles  = flag.String("static", "", "directory to serve as /static (for CSS/JS/images etc)")
-	loginFile    = flag.String("login", "", "template to present for the login page")
-	consentFile  = flag.String("consent", "", "template to present for the consent page")
-)
+type Config struct {
+	hydraURL      string
+	htpasswdPath  string
+	cookieDBPath  string
+	clientID      string
+	clientSecret  string
+	staticFiles   string
+	loginFile     string
+	consentFile   string
+	emailRegex    string
+	passwordRegex string
+}
 
-func main() {
-	flag.Parse()
+func run(c *Config) {
 	fmt.Println("Identity Provider started!")
 
-	if *loginFile != "" {
-		buf, err := ioutil.ReadFile(*loginFile)
+	if c.loginFile != "" {
+		buf, err := ioutil.ReadFile(c.loginFile)
 		if err != nil {
 			panic(err)
 		}
 		loginform = string(buf)
 	}
 
-	if *consentFile != "" {
-		buf, err := ioutil.ReadFile(*consentFile)
+	if c.consentFile != "" {
+		buf, err := ioutil.ReadFile(c.consentFile)
 		if err != nil {
 			panic(err)
 		}
@@ -100,22 +101,13 @@ func main() {
 		panic(err)
 	}
 
-	err = userdb.LoadHtpasswd(*htpasswdPath)
+	err = userdb.LoadHtpasswd(c.htpasswdPath)
 	if err != nil {
 		panic(err)
 	}
 
-	usernameRegex := os.Getenv("USERNAME_REGEX")
-	if usernameRegex == "" {
-		usernameRegex = govalidator.Email
-	}
-
-	passwordRegex := os.Getenv("PASSWORD_REGEX")
-	if passwordRegex == "" {
-		// Must contain at least one number and one uppercase and lowercase letter, and at least 8 or more characters
-		//passwordRegex = `(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}`
-
-		passwordRegex = `(.){8,}`
+	if c.emailRegex == "" {
+		c.emailRegex = govalidator.Email
 	}
 
 	provider, err := form.NewFormAuth(form.Config{
@@ -133,19 +125,19 @@ func main() {
 		Username: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
-			Patterns:  []string{usernameRegex},
+			Patterns:  []string{c.emailRegex},
 		},
 		Password: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
-			Patterns:  []string{passwordRegex},
+			Patterns:  []string{c.passwordRegex},
 		},
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	u, err := url.Parse(*cookieDBPath)
+	u, err := url.Parse(c.cookieDBPath)
 	if err != nil {
 		panic(err)
 	}
@@ -164,9 +156,9 @@ func main() {
 	}
 
 	idp := core.NewIDP(&core.IDPConfig{
-		ClusterURL:            *hydraURL,
-		ClientID:              *clientID,
-		ClientSecret:          *clientSecret,
+		ClusterURL:            c.hydraURL,
+		ClientID:              c.clientID,
+		ClientSecret:          c.clientSecret,
 		KeyCacheExpiration:    10 * time.Minute,
 		ClientCacheExpiration: 10 * time.Minute,
 		CacheCleanupInterval:  30 * time.Second,
@@ -186,7 +178,7 @@ func main() {
 		Provider:       provider,
 		CookieProvider: cookieProvider,
 		ConsentForm:    consent,
-		StaticFiles:    *staticFiles,
+		StaticFiles:    c.staticFiles,
 	})
 
 	router := httprouter.New()
@@ -194,4 +186,89 @@ func main() {
 	http.ListenAndServe(":3000", router)
 
 	idp.Close()
+
+}
+
+func main() {
+	app := cli.NewApp()
+	app.Name = "hydra-idp-form"
+	app.Usage = "Form-based IDP for Hydra"
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:   "hydra",
+			Value:  "https://localhost:4444",
+			Usage:  "Hydra's URL",
+			EnvVar: "HYDRA_URL",
+		},
+		cli.StringFlag{
+			Name:   "htpasswd",
+			Value:  "/etc/idp/htpasswd",
+			Usage:  "Path to credentials in htpasswd format",
+			EnvVar: "HTPASSWD_FILE",
+		},
+		cli.StringFlag{
+			Name:   "cookie-db",
+			Value:  "rethinkdb://localhost:28015",
+			Usage:  "Where are the cookies stored?",
+			EnvVar: "COOKIEDB_URL",
+		},
+		cli.StringFlag{
+			Name:   "client-id",
+			Value:  "",
+			Usage:  "used to connect to hydra",
+			EnvVar: "CLIENT_ID",
+		},
+		cli.StringFlag{
+			Name:   "client-secret",
+			Value:  "",
+			Usage:  "used to connect to hydra",
+			EnvVar: "CLIENT_SECRET",
+		},
+		cli.StringFlag{
+			Name:   "static",
+			Value:  "",
+			Usage:  "directory to serve as /static (for CSS/JS/images etc)",
+			EnvVar: "STATIC_DIR",
+		},
+		cli.StringFlag{
+			Name:   "login",
+			Value:  "",
+			Usage:  "template to present for the login page",
+			EnvVar: "LOGIN_TEMPLATE_FILE",
+		},
+		cli.StringFlag{
+			Name:   "consent",
+			Value:  "",
+			Usage:  "template to present for the consent page",
+			EnvVar: "CONSENT_TEMPLATE_FILE",
+		},
+		cli.StringFlag{
+			Name:   "email-regex",
+			Value:  "",
+			Usage:  "regex to validate email address (defaults to govalidator.Email)",
+			EnvVar: "EMAIL_REGEX",
+		},
+		cli.StringFlag{
+			Name:   "password-regex",
+			Value:  `(.){8,}`,
+			Usage:  "regex to validate password",
+			EnvVar: "PASSWORD_REGEX",
+		},
+	}
+	app.Action = func(c *cli.Context) {
+		run(&Config{
+			hydraURL:      c.String("hydra"),
+			htpasswdPath:  c.String("htpasswd"),
+			cookieDBPath:  c.String("cookie-db"),
+			clientID:      c.String("client-id"),
+			clientSecret:  c.String("client-secret"),
+			staticFiles:   c.String("static"),
+			loginFile:     c.String("login"),
+			consentFile:   c.String("consent"),
+			emailRegex:    c.String("email-regex"),
+			passwordRegex: c.String("password-regex"),
+		})
+	}
+
+	app.Run(os.Args)
 }

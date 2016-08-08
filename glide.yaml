@@ -2,9 +2,9 @@ package: github.com/boyvinall/hydra-idp-form
 import:
 - package: github.com/gorilla/sessions
 - package: github.com/janekolszak/idp
-  version: master
+  version: dev
+  repo: git@github.com:boyvinall/idp.git
   vcs: git
-  repo: git@github.com:boyvinall/idp
   subpackages:
   - core
   - helpers
@@ -13,8 +13,8 @@ import:
   - userdb/memory
 - package: github.com/ory-am/hydra
   version: 0.2-stable
-  vcs: git
   repo: git@github.com:boyvinall/hydra
+  vcs: git
   subpackages:
   - client
   - jwk
@@ -31,3 +31,5 @@ import:
   version: ^1.1.0
 - package: github.com/mattn/go-sqlite3
   version: ^1.1.0
+- package: github.com/codegangsta/cli
+  version: ^1.18.0

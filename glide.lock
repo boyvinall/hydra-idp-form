@@ -1,5 +1,5 @@
-hash: a220230f3d9a12c4364a65ad4c2d3e00deaf42ae997672733b8e7d5f0bb73d6b
-updated: 2016-08-07T21:35:26.78961164+01:00
+hash: 4877dbd61cae77b5a2a3787d7f2616859a6e6ca9fc859628daf32192508a0be9
+updated: 2016-08-08T22:27:22.563517583+01:00
 imports:
 - name: github.com/asaskevich/govalidator
   version: 7664702784775e51966f0885f5cd27435916517b
@@ -7,6 +7,8 @@ imports:
   version: ffaa107fbd880f6d18cd6fec9b511668dcad8639
 - name: github.com/cenk/backoff
   version: cdf48bbc1eb78d1349cbda326a4a037f7ba565c6
+- name: github.com/codegangsta/cli
+  version: 1efa31f08b9333f1bd4882d61f9d668a70cd902e
 - name: github.com/davecgh/go-spew
   version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
@@ -23,8 +25,6 @@ imports:
   - proto
 - name: github.com/gorilla/context
   version: aed02d124ae4a0e94fea4541c8effd05bf0c8296
-- name: github.com/gorilla/schema
-  version: d68043406bea8bd90f7b38e9c54fab18d903ea25
 - name: github.com/gorilla/securecookie
   version: ff356348f74133a59d3e93aa24b5b4551b6fe90d
 - name: github.com/gorilla/sessions
@@ -45,9 +45,9 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/janekolszak/idp
-  vcs: git
-  repo: git@github.com:boyvinall/idp
   version: a3cc9acfd9de571d2143f9ceee273e924dc85e13
+  repo: git@github.com:boyvinall/idp.git
+  vcs: git
   subpackages:
   - core
   - helpers
@@ -92,6 +92,8 @@ imports:
   - rand
 - name: github.com/ory-am/hydra
   version: 0195703e1ac603effae19e7c7738b182b0abda2d
+  repo: git@github.com:boyvinall/hydra
+  vcs: git
   subpackages:
   - client
   - jwk
@@ -104,6 +106,7 @@ imports:
   - policy
   - warden
   - config
+  - pkg/helper
 - name: github.com/ory-am/ladon
   version: 63d3e27a44b7e60f0cfd8a38231ccbe13c74aee7
 - name: github.com/patrickmn/go-cache
