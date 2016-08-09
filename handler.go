@@ -81,6 +81,7 @@ func (h *IdpHandler) Attach(router *httprouter.Router) {
 	if h.StaticFiles != "" {
 		router.ServeFiles("/static/*filepath", http.Dir(h.StaticFiles))
 	}
+	router.GET("/verify", h.HandleVerifyGET)
 }
 
 func (h *IdpHandler) HandleCancel(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -313,4 +314,16 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, p
 		email,
 		strings.TrimSpace(fmt.Sprintf("%s %s", firstname, lastname)),
 		username)
+}
+
+func (h *IdpHandler) HandleVerifyGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	userid, err := h.Provider.Verify(r)
+	if err != nil {
+		h.LogRequest(r, err.Error())
+		h.Provider.WriteError(w, r, err)
+		return
+	}
+
+	h.LogRequest(r, "OK")
+	h.Provider.WriteVerify(w, r, userid)
 }

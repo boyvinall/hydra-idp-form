@@ -25,9 +25,13 @@ type Config struct {
 	RegisterPasswordField        string
 	RegisterPasswordConfirmField string
 
-	Email     Complexity
-	Password  Complexity
+	Email    Complexity
+	Password Complexity
+
 	UserStore userdb.UserStore
+
+	VerifyForm   string
+	UserVerifier userdb.UserVerifier
 }
 
 type FormAuth struct {
@@ -108,8 +112,7 @@ func (f *FormAuth) Register(r *http.Request) (id string, err error) {
 		return
 	}
 
-	// _, err = f.UserVerifier.Push(id, data.Username, data.Email)
-	// log.Printf("inserted email %s = ID %s\n", email, id)
+	_, err = f.UserVerifier.Push(id, user.Username, user.Email)
 	return
 }
 
@@ -118,11 +121,35 @@ func (f *FormAuth) WriteRegister(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (f *FormAuth) Verify(r *http.Request) (userid string, err error) {
-	return "", core.ErrorNotImplemented
+	code := r.URL.Query().Get("code")
+	userid, err = f.UserVerifier.Verify(code)
+	if err != nil {
+		return "", err
+	}
+
+	err = f.UserStore.SetIsVerifiedWithID(userid)
+	if err != nil {
+		return "", err
+	}
+
+	return userid, nil
 }
 
 func (f *FormAuth) WriteVerify(w http.ResponseWriter, r *http.Request, userid string) error {
-	return core.ErrorNotImplemented
+	user, err := f.UserStore.GetWithID(userid)
+	if err != nil {
+		return err
+	}
+
+	data := map[string]string{
+		"Username":  user.Username,
+		"FirstName": user.FirstName,
+		"LastName":  user.LastName,
+		"Email":     user.Email,
+	}
+
+	t := template.Must(template.New("tmpl").Parse(f.VerifyForm))
+	return t.Execute(w, data)
 }
 
 func (f *FormAuth) WriteError(w http.ResponseWriter, r *http.Request, err error) error {
