@@ -6,12 +6,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
-	"golang.org/x/net/context"
-
+	"github.com/boyvinall/hydra-idp-form/providers/form"
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
 	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/context"
 )
 
 type HandlerConfig struct {
@@ -145,9 +146,9 @@ func (h *IdpHandler) HandleChallengeGET(w http.ResponseWriter, r *http.Request, 
 
 func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	saveCookie := true
-	selector, user, err := h.CookieProvider.Check(r)
+	selector, userid, err := h.CookieProvider.Check(r)
 	if err == nil {
-		err = h.CookieProvider.UpdateCookie(w, r, selector, user)
+		err = h.CookieProvider.UpdateCookie(w, r, selector, userid)
 		if err != nil {
 			h.LogRequest(r, fmt.Sprintf("UpdateCookie(): %s", err.Error()))
 			return
@@ -157,25 +158,27 @@ func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request,
 	} else {
 		// Can't authenticate with "Remember Me" cookie,
 		// so try with another provider:
-		user, err = h.Provider.Check(r)
+		userid, err = h.Provider.Check(r)
 		if err != nil {
 			// for "form" provider GET, this just displays the form
-			err = h.Provider.WriteError(w, r, err)
-			if err != nil {
-				h.LogRequest(r, err.Error())
+			err2 := h.Provider.WriteError(w, r, err)
+			if err2 != nil {
+				h.LogRequest(r, fmt.Sprint("Provider.WriteError(): ", err2.Error()))
+				return
 			}
+			h.LogRequest(r, fmt.Sprint("Provider.Check(): ", err.Error()))
 			return
 		}
 		h.LogRequest(r, "Provider.Check(): OK")
 	}
-	h.RedirectConsent(w, r, user, saveCookie)
+	h.RedirectConsent(w, r, userid, saveCookie)
 }
 
 // RedirectConsent may optionally skip the consent page if the clientID is trusted
 func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
-	user string, saveCookie bool) {
+	subject string, saveCookie bool) {
 
-	challenge, err := h.IDP.NewChallenge(r, user)
+	challenge, err := h.IDP.NewChallenge(r, subject)
 	if err != nil {
 		h.LogRequest(r, fmt.Sprintf("NewChallenge(): %s", err.Error()))
 		h.Provider.WriteError(w, r, err)
@@ -200,7 +203,7 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 
 	if saveCookie {
 		// Save the RememberMe cookie
-		err := h.CookieProvider.SetCookie(w, r, user)
+		err := h.CookieProvider.SetCookie(w, r, subject)
 		if err != nil {
 			h.LogRequest(r, fmt.Sprintf("error setting cookie: %s", err.Error()))
 		}
@@ -268,6 +271,13 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, p
 
 	h.LogRequest(r, r.URL.RawQuery)
 
+	id := wardenctx.Subject
+	p := h.Provider.(*form.FormAuth)
+	user, err := p.Config.UserStore.GetWithID(id)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Subject", id)
+
 	// type Context struct {
 	// 	Subject       string    `json:"sub"`
 	// 	GrantedScopes []string  `json:"scopes"`
@@ -277,11 +287,30 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, p
 	// 	ExpiresAt     time.Time `json:"exp"`
 	// }
 
-	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		h.LogRequest(r, fmt.Sprintf("fail: %s", err.Error()))
+		switch err {
+		case core.ErrorNoSuchUser:
+			fallthrough
 
-	email := wardenctx.Subject
-	id := email // temporary....
-	name := ""
-	username := ""
-	fmt.Fprintf(w, `{"id": "%s", "email":"%s", "name": "%s", "username": "%s"}`, id, email, name, username)
+		default:
+			fmt.Fprintf(w, `{"error": "%s"}`, err.Error())
+		}
+		return
+	}
+	email := user.GetEmail()
+	firstname := user.GetFirstName()
+	lastname := user.GetLastName()
+	username := user.GetUsername()
+
+	fmt.Fprintf(w, `{
+  "id": "%s",
+  "email":"%s",
+  "name": "%s",
+  "username": "%s"
+}`,
+		id,
+		email,
+		strings.TrimSpace(fmt.Sprintf("%s %s", firstname, lastname)),
+		username)
 }

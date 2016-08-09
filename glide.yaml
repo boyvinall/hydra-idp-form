@@ -29,7 +29,7 @@ import:
   - config
 - package: github.com/julienschmidt/httprouter
   version: ^1.1.0
-- package: github.com/mattn/go-sqlite3
-  version: ^1.1.0
 - package: github.com/urfave/cli
   version: ^1.18.0
+- package: gopkg.in/dancannon/gorethink.v2
+  version: ^2.1.0

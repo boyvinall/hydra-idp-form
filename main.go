@@ -18,8 +18,9 @@ import (
 	"github.com/janekolszak/idp/providers/cookie"
 	"github.com/urfave/cli"
 	// "github.com/janekolszak/idp/providers/form"
-	"github.com/janekolszak/idp/userdb/memory"
+	"github.com/janekolszak/idp/userdb/rethinkdb/store"
 	"github.com/julienschmidt/httprouter"
+	r "gopkg.in/dancannon/gorethink.v2"
 )
 
 var (
@@ -66,7 +67,6 @@ var (
 
 type Config struct {
 	hydraURL      string
-	htpasswdPath  string
 	dbURL         string
 	clientID      string
 	clientSecret  string
@@ -108,17 +108,18 @@ func run(cfg *Config) {
 		consent = string(buf)
 	}
 
-	// Setup the providers
-	userdb, err := memory.NewMemStore()
+	session, err := r.Connect(r.ConnectOpts{
+		Address:  dbhost,
+		Database: dbname,
+	})
 	if err != nil {
 		panic(err)
 	}
 
-	if cfg.htpasswdPath != "" {
-		err = userdb.LoadHtpasswd(cfg.htpasswdPath)
-		if err != nil {
-			panic(err)
-		}
+	// Setup the providers
+	userdb, err := store.NewStore(session)
+	if err != nil {
+		panic(err)
 	}
 
 	if cfg.emailRegex == "" {
@@ -127,9 +128,9 @@ func run(cfg *Config) {
 
 	provider, err := form.NewFormAuth(form.Config{
 		LoginForm:                    loginform,
-		LoginUsernameField:           "email",
+		LoginEmailField:              "email",
 		LoginPasswordField:           "password",
-		RegisterUsernameField:        "email",
+		RegisterEmailField:           "email",
 		RegisterPasswordField:        "password",
 		RegisterPasswordConfirmField: "confirm",
 
@@ -137,7 +138,7 @@ func run(cfg *Config) {
 		UserStore: userdb,
 
 		// Validation options:
-		Username: form.Complexity{
+		Email: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
 			Patterns:  []string{cfg.emailRegex},
@@ -177,10 +178,9 @@ func run(cfg *Config) {
 		KeyCacheExpiration:    10 * time.Minute,
 		ClientCacheExpiration: 10 * time.Minute,
 		CacheCleanupInterval:  30 * time.Second,
-
-		// TODO: [IMPORTANT] Don't use CookieStore here
-		ChallengeStore: challengeCookieStore,
+		ChallengeStore:        challengeCookieStore,
 	})
+	defer idp.Close()
 
 	// Connect with Hydra
 	err = idp.Connect()
@@ -200,8 +200,6 @@ func run(cfg *Config) {
 	handler.Attach(router)
 	http.ListenAndServe(":3000", router)
 
-	idp.Close()
-
 }
 
 func main() {
@@ -214,12 +212,6 @@ func main() {
 			Value:  "https://localhost:4444",
 			Usage:  "Hydra's URL",
 			EnvVar: "HYDRA_URL",
-		},
-		cli.StringFlag{
-			Name:   "htpasswd",
-			Value:  "",
-			Usage:  "Path to credentials in htpasswd format",
-			EnvVar: "HTPASSWD_FILE",
 		},
 		cli.StringFlag{
 			Name:   "db",
@@ -273,7 +265,6 @@ func main() {
 	app.Action = func(cfg *cli.Context) {
 		run(&Config{
 			hydraURL:      cfg.String("hydra"),
-			htpasswdPath:  cfg.String("htpasswd"),
 			dbURL:         cfg.String("db"),
 			clientID:      cfg.String("client-id"),
 			clientSecret:  cfg.String("client-secret"),

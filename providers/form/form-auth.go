@@ -18,16 +18,16 @@ type LoginFormContext struct {
 
 type Config struct {
 	LoginForm          string
-	LoginUsernameField string
+	LoginEmailField    string
 	LoginPasswordField string
 
-	RegisterUsernameField        string
+	RegisterEmailField           string
 	RegisterPasswordField        string
 	RegisterPasswordConfirmField string
 
-	Username  Complexity
+	Email     Complexity
 	Password  Complexity
-	UserStore userdb.Store
+	UserStore userdb.UserStore
 }
 
 type FormAuth struct {
@@ -35,14 +35,14 @@ type FormAuth struct {
 }
 
 func NewFormAuth(c Config) (*FormAuth, error) {
-	if c.LoginUsernameField == "" ||
+	if c.LoginEmailField == "" ||
 		c.LoginPasswordField == "" ||
-		c.LoginUsernameField == c.LoginPasswordField {
+		c.LoginEmailField == c.LoginPasswordField {
 		return nil, core.ErrorInvalidConfig
 	}
 
-	if len(c.Username.Patterns) == 0 {
-		c.Username.Patterns = []string{".*"}
+	if len(c.Email.Patterns) == 0 {
+		c.Email.Patterns = []string{".*"}
 	}
 
 	if len(c.Password.Patterns) == 0 {
@@ -53,32 +53,30 @@ func NewFormAuth(c Config) (*FormAuth, error) {
 	return &auth, nil
 }
 
-func (f *FormAuth) Check(r *http.Request) (user string, err error) {
-	user = r.FormValue(f.LoginUsernameField)
-	if !f.Config.Username.Validate(user) {
-		user = ""
+func (f *FormAuth) Check(r *http.Request) (id string, err error) {
+	email := r.FormValue(f.LoginEmailField)
+	if !f.Config.Email.Validate(email) {
 		err = core.ErrorBadRequest
 		return
 	}
 
 	password := r.FormValue(f.LoginPasswordField)
 	if !f.Config.Password.Validate(password) {
-		user = ""
 		err = core.ErrorBadRequest
 		return
 	}
 
-	err = f.UserStore.Check(user, password)
+	id, err = f.UserStore.CheckWithEmail(email, password)
 	if err != nil {
-		user = ""
+		id = ""
 		err = core.ErrorAuthenticationFailure
 	}
 
 	return
 }
 
-func (f *FormAuth) Register(r *http.Request) (user string, err error) {
-	user = r.FormValue(f.RegisterUsernameField)
+func (f *FormAuth) Register(r *http.Request) (id string, err error) {
+	email := r.FormValue(f.RegisterEmailField)
 	password := r.FormValue(f.RegisterPasswordField)
 	confirm := r.FormValue(f.RegisterPasswordConfirmField)
 
@@ -90,16 +88,28 @@ func (f *FormAuth) Register(r *http.Request) (user string, err error) {
 		err = core.ErrorComplexityFailed
 	}
 
-	if !f.Config.Username.Validate(user) {
+	if !f.Config.Email.Validate(email) {
 		err = core.ErrorComplexityFailed
 	}
 
 	if err != nil {
-		user = ""
 		return
 	}
 
-	err = f.UserStore.Add(user, password)
+	// log.Printf("attempt to insert email %s\n", email)
+	user := userdb.User{
+		Email:    email,
+		Username: email,
+	}
+
+	id, err = f.UserStore.Insert(&user, password)
+	if err != nil {
+		id = ""
+		return
+	}
+
+	// _, err = f.UserVerifier.Push(id, data.Username, data.Email)
+	// log.Printf("inserted email %s = ID %s\n", email, id)
 	return
 }
 
