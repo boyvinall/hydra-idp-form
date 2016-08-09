@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,10 +13,10 @@ import (
 	"github.com/boyvinall/hydra-idp-form/providers/form"
 
 	"github.com/asaskevich/govalidator"
-	"github.com/codegangsta/cli"
-	"github.com/gorilla/sessions"
+	"github.com/boj/rethinkstore"
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
+	"github.com/urfave/cli"
 	// "github.com/janekolszak/idp/providers/form"
 	"github.com/janekolszak/idp/userdb/memory"
 	"github.com/julienschmidt/httprouter"
@@ -66,7 +67,7 @@ var (
 type Config struct {
 	hydraURL      string
 	htpasswdPath  string
-	cookieDBPath  string
+	dbURL         string
 	clientID      string
 	clientSecret  string
 	staticFiles   string
@@ -76,19 +77,31 @@ type Config struct {
 	passwordRegex string
 }
 
-func run(c *Config) {
-	fmt.Println("Identity Provider started!")
+func run(cfg *Config) {
+	log.Println("Identity Provider started!")
 
-	if c.loginFile != "" {
-		buf, err := ioutil.ReadFile(c.loginFile)
+	u, err := url.Parse(cfg.dbURL)
+	if err != nil {
+		panic(err)
+	}
+	if u.Scheme != "rethinkdb" {
+		panic(fmt.Sprintln("only rethinkdb supported at present:", cfg.dbURL))
+	}
+	dbhost := u.Host
+	dbname := strings.TrimLeft(u.Path, "/")
+	log.Println("dbhost:", dbhost)
+	log.Println("dbname:", dbname)
+
+	if cfg.loginFile != "" {
+		buf, err := ioutil.ReadFile(cfg.loginFile)
 		if err != nil {
 			panic(err)
 		}
 		loginform = string(buf)
 	}
 
-	if c.consentFile != "" {
-		buf, err := ioutil.ReadFile(c.consentFile)
+	if cfg.consentFile != "" {
+		buf, err := ioutil.ReadFile(cfg.consentFile)
 		if err != nil {
 			panic(err)
 		}
@@ -101,15 +114,15 @@ func run(c *Config) {
 		panic(err)
 	}
 
-	if c.htpasswdPath != "" {
-		err = userdb.LoadHtpasswd(c.htpasswdPath)
+	if cfg.htpasswdPath != "" {
+		err = userdb.LoadHtpasswd(cfg.htpasswdPath)
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	if c.emailRegex == "" {
-		c.emailRegex = govalidator.Email
+	if cfg.emailRegex == "" {
+		cfg.emailRegex = govalidator.Email
 	}
 
 	provider, err := form.NewFormAuth(form.Config{
@@ -127,26 +140,19 @@ func run(c *Config) {
 		Username: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
-			Patterns:  []string{c.emailRegex},
+			Patterns:  []string{cfg.emailRegex},
 		},
 		Password: form.Complexity{
 			MinLength: 1,
 			MaxLength: 100,
-			Patterns:  []string{c.passwordRegex},
+			Patterns:  []string{cfg.passwordRegex},
 		},
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	u, err := url.Parse(c.cookieDBPath)
-	if err != nil {
-		panic(err)
-	}
-	if u.Scheme != "rethinkdb" {
-		panic("cookiedb must be rethinkdb")
-	}
-	dbCookieStore, err := cookie.NewRethinkDBStore(u.Host, strings.TrimLeft(u.Path, "/"))
+	dbCookieStore, err := cookie.NewRethinkDBStore(dbhost, dbname)
 	if err != nil {
 		panic(err)
 	}
@@ -157,16 +163,23 @@ func run(c *Config) {
 		MaxAge: time.Minute * 1,
 	}
 
+	challengeCookieStore, err := rethinkstore.NewRethinkStore(dbhost, dbname, "challenges", 5, 5, []byte("something-very-secret"))
+	if err != nil {
+		panic(err)
+	}
+	defer challengeCookieStore.Close()
+	challengeCookieStore.MaxAge(60 * 5) // 5 min
+
 	idp := core.NewIDP(&core.IDPConfig{
-		ClusterURL:            c.hydraURL,
-		ClientID:              c.clientID,
-		ClientSecret:          c.clientSecret,
+		ClusterURL:            cfg.hydraURL,
+		ClientID:              cfg.clientID,
+		ClientSecret:          cfg.clientSecret,
 		KeyCacheExpiration:    10 * time.Minute,
 		ClientCacheExpiration: 10 * time.Minute,
 		CacheCleanupInterval:  30 * time.Second,
 
 		// TODO: [IMPORTANT] Don't use CookieStore here
-		ChallengeStore: sessions.NewCookieStore([]byte("something-very-secret")),
+		ChallengeStore: challengeCookieStore,
 	})
 
 	// Connect with Hydra
@@ -180,7 +193,7 @@ func run(c *Config) {
 		Provider:       provider,
 		CookieProvider: cookieProvider,
 		ConsentForm:    consent,
-		StaticFiles:    c.staticFiles,
+		StaticFiles:    cfg.staticFiles,
 	})
 
 	router := httprouter.New()
@@ -209,10 +222,10 @@ func main() {
 			EnvVar: "HTPASSWD_FILE",
 		},
 		cli.StringFlag{
-			Name:   "cookie-db",
-			Value:  "rethinkdb://localhost:28015/idp_cookies",
-			Usage:  "Where are the cookies stored?",
-			EnvVar: "COOKIEDB_URL",
+			Name:   "db",
+			Value:  "rethinkdb://localhost:28015/idp",
+			Usage:  "Where are the cookies/challenges/users stored? (table names are hardcoded within this database)",
+			EnvVar: "DB_URL",
 		},
 		cli.StringFlag{
 			Name:   "client-id",
@@ -257,18 +270,18 @@ func main() {
 			EnvVar: "PASSWORD_REGEX",
 		},
 	}
-	app.Action = func(c *cli.Context) {
+	app.Action = func(cfg *cli.Context) {
 		run(&Config{
-			hydraURL:      c.String("hydra"),
-			htpasswdPath:  c.String("htpasswd"),
-			cookieDBPath:  c.String("cookie-db"),
-			clientID:      c.String("client-id"),
-			clientSecret:  c.String("client-secret"),
-			staticFiles:   c.String("static"),
-			loginFile:     c.String("login"),
-			consentFile:   c.String("consent"),
-			emailRegex:    c.String("email-regex"),
-			passwordRegex: c.String("password-regex"),
+			hydraURL:      cfg.String("hydra"),
+			htpasswdPath:  cfg.String("htpasswd"),
+			dbURL:         cfg.String("db"),
+			clientID:      cfg.String("client-id"),
+			clientSecret:  cfg.String("client-secret"),
+			staticFiles:   cfg.String("static"),
+			loginFile:     cfg.String("login"),
+			consentFile:   cfg.String("consent"),
+			emailRegex:    cfg.String("email-regex"),
+			passwordRegex: cfg.String("password-regex"),
 		})
 	}
 
