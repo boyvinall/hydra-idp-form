@@ -153,24 +153,28 @@ func (f *FormAuth) WriteVerify(w http.ResponseWriter, r *http.Request, userid st
 }
 
 func (f *FormAuth) WriteError(w http.ResponseWriter, r *http.Request, err error) error {
-	query := url.Values{}
-	query["challenge"] = []string{r.URL.Query().Get("challenge")}
-	context := LoginFormContext{
-		SubmitURI:   r.URL.RequestURI(),
-		RegisterURI: fmt.Sprintf("/register?%s", query.Encode()),
-	}
-
+	msg := r.URL.Query().Get("msg")
 	if r.Method == "POST" && err != nil {
 		switch err {
 		case core.ErrorAuthenticationFailure:
-			context.Msg = "Authentication failed"
+			msg = "Authentication failed"
 
 		default:
-			context.Msg = "An error occurred"
+			msg = "An error occurred"
 		}
-	} else {
-		context.Msg = r.URL.Query().Get("msg")
 	}
+	return f.WriteLoginPage(w, r, msg)
+}
+
+func (f *FormAuth) WriteLoginPage(w http.ResponseWriter, r *http.Request, msg string) error {
+	query := url.Values{}
+	query["challenge"] = []string{r.URL.Query().Get("challenge")}
+	context := LoginFormContext{
+		SubmitURI:   fmt.Sprintf("/?%s", query.Encode()),
+		RegisterURI: fmt.Sprintf("/register?%s", query.Encode()),
+		Msg:         msg,
+	}
+
 	t := template.Must(template.New("tmpl").Parse(f.LoginForm))
 	return t.Execute(w, context)
 }

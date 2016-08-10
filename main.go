@@ -470,7 +470,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:   "smtp-url",
-			Value:  "smtp://localhost/",
+			Value:  "smtp://127.0.0.1/",
 			Usage:  "SMTP connection details .. supports smtp// or smtps://, user:password@ and port specifier",
 			EnvVar: "SMTP_URL",
 		},

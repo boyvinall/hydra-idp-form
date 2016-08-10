@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/boyvinall/hydra-idp-form/providers/form"
+
 	"github.com/janekolszak/idp/core"
 	"github.com/janekolszak/idp/providers/cookie"
 	"github.com/julienschmidt/httprouter"
@@ -58,11 +59,25 @@ func CreateHandler(config HandlerConfig) (*IdpHandler, error) {
 }
 
 func (h *IdpHandler) LogRequest(r *http.Request, format string, a ...interface{}) {
+
+	path := r.URL.Path
+	if len(r.URL.Query()) > 0 {
+		q := r.URL.Query()
+		for k, v := range q {
+			vv := v[0]
+			if len(vv) > 10 {
+				vv := v[0]
+				q[k] = []string{vv[:9] + "..."}
+			}
+		}
+		path += "?" + q.Encode()
+	}
+
 	log.Printf(`%s (%s) %s "%s" "%s" "%s"`,
 		r.RemoteAddr,
 		r.Header.Get("X-Forwarded-For"),
 		r.Method,
-		r.URL.Path,
+		path,
 		fmt.Sprintf(format, a...),
 		r.UserAgent())
 }
@@ -74,7 +89,7 @@ func (h *IdpHandler) Attach(router *httprouter.Router) {
 	router.POST("/cancel", h.HandleCancel)
 	router.GET("/consent", h.HandleConsentGET)
 	router.POST("/consent", h.HandleConsentPOST)
-	router.GET("/userinfo/:token", h.HandleUserinfoGET)
+	router.GET("/userinfo", h.HandleUserinfoGET)
 	if h.RegisterForm != "" {
 		router.GET("/register", h.HandleRegisterGET)
 	}
@@ -85,6 +100,7 @@ func (h *IdpHandler) Attach(router *httprouter.Router) {
 	router.GET("/verify", h.HandleVerifyGET)
 }
 
+// HandleCancel is part of the consent process
 func (h *IdpHandler) HandleCancel(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	challenge, err := h.IDP.GetChallenge(r)
 	if err != nil {
@@ -114,25 +130,26 @@ func (h *IdpHandler) HandleRegisterGET(w http.ResponseWriter, r *http.Request, _
 func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	username, err := h.Provider.Register(r)
 	if err != nil {
-		query := url.Values{}
-		query["challenge"] = []string{r.URL.Query().Get("challenge")}
+
 		h.LogRequest(r, "Provider.Register(): %s", err.Error())
+		msg := ""
 
 		switch err {
 
 		case core.ErrorPasswordMismatch:
-			query["msg"] = []string{"Passwords do not match"}
+			msg = "Passwords do not match"
 
 		case core.ErrorComplexityFailed:
-			query["msg"] = []string{"Username/password does not meet required complexity"}
+			msg = "Username/password does not meet required complexity"
 
 		case core.ErrorUserAlreadyExists:
-			query["msg"] = []string{"user already exists"}
+			msg = "user already exists"
 
 		default:
 			// 	query["msg"] = []string{err.Error()}
 		}
-		http.Redirect(w, r, fmt.Sprintf("/?%s", query.Encode()), http.StatusFound)
+		p := h.Provider.(*form.FormAuth)
+		p.WriteLoginPage(w, r, msg)
 		return
 	}
 
@@ -141,9 +158,9 @@ func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, 
 }
 
 func (h *IdpHandler) HandleChallengeGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// for "form" provider GET, this just displays the form
 	h.LogRequest(r, "HandleChallengeGET(): OK")
-	h.Provider.WriteError(w, r, nil)
+	p := h.Provider.(*form.FormAuth)
+	p.WriteLoginPage(w, r, "")
 }
 
 func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -261,10 +278,10 @@ func (h *IdpHandler) HandleConsentPOST(w http.ResponseWriter, r *http.Request, _
 }
 
 func (h *IdpHandler) httpError(w http.ResponseWriter, errorMsg string, statusCode int) {
-	type Error struct {
-		msg string `json:"error"`
+	type ErrorMsg struct {
+		Error string `json:"error"`
 	}
-	e := Error{msg: errorMsg}
+	e := ErrorMsg{Error: errorMsg}
 	b, err := json.Marshal(e)
 	var s string
 	if err != nil {
@@ -275,15 +292,15 @@ func (h *IdpHandler) httpError(w http.ResponseWriter, errorMsg string, statusCod
 	http.Error(w, s, statusCode)
 }
 
-func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	token := ps.ByName("token")
+	token := r.URL.Query().Get("token")
 	ctx := context.Background()
 	wardenctx, err := h.IDP.WardenAuthorized(ctx, token, "openid")
 	if err != nil {
-		h.LogRequest(r, "fail: %s", err.Error())
+		h.LogRequest(r, "IDP.WardenAuthorized(): %s", err.Error())
 		h.httpError(w, "token denied or not found", http.StatusForbidden)
 		return
 	}
