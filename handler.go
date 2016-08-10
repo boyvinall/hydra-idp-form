@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -56,13 +57,13 @@ func CreateHandler(config HandlerConfig) (*IdpHandler, error) {
 	return &h, nil
 }
 
-func (h *IdpHandler) LogRequest(r *http.Request, status string) {
+func (h *IdpHandler) LogRequest(r *http.Request, format string, a ...interface{}) {
 	log.Printf(`%s (%s) %s "%s" "%s" "%s"`,
 		r.RemoteAddr,
 		r.Header.Get("X-Forwarded-For"),
 		r.Method,
 		r.URL.Path,
-		status,
+		fmt.Sprintf(format, a...),
 		r.UserAgent())
 }
 
@@ -115,7 +116,7 @@ func (h *IdpHandler) HandleRegisterPOST(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		query := url.Values{}
 		query["challenge"] = []string{r.URL.Query().Get("challenge")}
-		h.LogRequest(r, fmt.Sprintf("Provider.Register(): %s", err.Error()))
+		h.LogRequest(r, "Provider.Register(): %s", err.Error())
 
 		switch err {
 
@@ -151,7 +152,7 @@ func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request,
 	if err == nil {
 		err = h.CookieProvider.UpdateCookie(w, r, selector, userid)
 		if err != nil {
-			h.LogRequest(r, fmt.Sprintf("UpdateCookie(): %s", err.Error()))
+			h.LogRequest(r, "UpdateCookie(): %s", err.Error())
 			return
 		}
 		h.LogRequest(r, "UpdateCookie(): OK")
@@ -164,10 +165,10 @@ func (h *IdpHandler) HandleChallengePOST(w http.ResponseWriter, r *http.Request,
 			// for "form" provider GET, this just displays the form
 			err2 := h.Provider.WriteError(w, r, err)
 			if err2 != nil {
-				h.LogRequest(r, fmt.Sprint("Provider.WriteError(): ", err2.Error()))
+				h.LogRequest(r, "Provider.WriteError(): %s", err2.Error())
 				return
 			}
-			h.LogRequest(r, fmt.Sprint("Provider.Check(): ", err.Error()))
+			h.LogRequest(r, "Provider.Check(): %s", err.Error())
 			return
 		}
 		h.LogRequest(r, "Provider.Check(): OK")
@@ -181,7 +182,7 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 
 	challenge, err := h.IDP.NewChallenge(r, subject)
 	if err != nil {
-		h.LogRequest(r, fmt.Sprintf("NewChallenge(): %s", err.Error()))
+		h.LogRequest(r, "NewChallenge(): %s", err.Error())
 		h.Provider.WriteError(w, r, err)
 		return
 	}
@@ -194,7 +195,7 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 		err = challenge.GrantAccessToAll(w, r)
 		if err != nil {
 			// Server error
-			h.LogRequest(r, fmt.Sprintf("GrantAccessToAll(): %s", err.Error()))
+			h.LogRequest(r, "GrantAccessToAll(): %s", err.Error())
 			h.Provider.WriteError(w, r, err)
 			return
 		}
@@ -206,13 +207,13 @@ func (h *IdpHandler) RedirectConsent(w http.ResponseWriter, r *http.Request,
 		// Save the RememberMe cookie
 		err := h.CookieProvider.SetCookie(w, r, subject)
 		if err != nil {
-			h.LogRequest(r, fmt.Sprintf("error setting cookie: %s", err.Error()))
+			h.LogRequest(r, "error setting cookie: %s", err.Error())
 		}
 	}
 
 	err = challenge.Save(w, r)
 	if err != nil {
-		h.LogRequest(r, fmt.Sprintf("error saving challenge: %s", err.Error()))
+		h.LogRequest(r, "error saving challenge: %s", err.Error())
 		h.Provider.WriteError(w, r, err)
 		return
 	}
@@ -259,14 +260,31 @@ func (h *IdpHandler) HandleConsentPOST(w http.ResponseWriter, r *http.Request, _
 	}
 }
 
+func (h *IdpHandler) httpError(w http.ResponseWriter, errorMsg string, statusCode int) {
+	type Error struct {
+		msg string `json:"error"`
+	}
+	e := Error{msg: errorMsg}
+	b, err := json.Marshal(e)
+	var s string
+	if err != nil {
+		s = `{"error":"unknown error"}`
+	} else {
+		s = string(b)
+	}
+	http.Error(w, s, statusCode)
+}
+
 func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+	w.Header().Set("Content-Type", "application/json")
 
 	token := ps.ByName("token")
 	ctx := context.Background()
 	wardenctx, err := h.IDP.WardenAuthorized(ctx, token, "openid")
 	if err != nil {
-		h.LogRequest(r, fmt.Sprintf("fail: %s", err.Error()))
-		http.Error(w, err.Error(), http.StatusForbidden)
+		h.LogRequest(r, "fail: %s", err.Error())
+		h.httpError(w, "token denied or not found", http.StatusForbidden)
 		return
 	}
 
@@ -276,7 +294,6 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, p
 	p := h.Provider.(*form.FormAuth)
 	user, err := p.Config.UserStore.GetWithID(id)
 
-	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Subject", id)
 
 	// type Context struct {
@@ -289,31 +306,40 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, p
 	// }
 
 	if err != nil {
-		h.LogRequest(r, fmt.Sprintf("fail: %s", err.Error()))
+		h.LogRequest(r, "fail: %s", err.Error())
+		errorMsg := err.Error()
+		status := http.StatusInternalServerError
 		switch err {
 		case core.ErrorNoSuchUser:
-			fallthrough
+			status = http.StatusNotFound
 
 		default:
-			fmt.Fprintf(w, `{"error": "%s"}`, err.Error())
 		}
+		h.httpError(w, errorMsg, status)
 		return
 	}
-	email := user.GetEmail()
-	firstname := user.GetFirstName()
-	lastname := user.GetLastName()
-	username := user.GetUsername()
 
-	fmt.Fprintf(w, `{
-  "id": "%s",
-  "email":"%s",
-  "name": "%s",
-  "username": "%s"
-}`,
-		id,
-		email,
-		strings.TrimSpace(fmt.Sprintf("%s %s", firstname, lastname)),
-		username)
+	type userinfo struct {
+		ID       string `json:"id"`
+		Email    string `json:"email"`
+		Name     string `json:"name"`
+		Username string `json:"username"`
+	}
+	u := userinfo{
+		ID:       id,
+		Email:    user.GetEmail(),
+		Username: user.GetUsername(),
+		Name:     strings.TrimSpace(fmt.Sprintf("%s %s", user.GetFirstName(), user.GetLastName())),
+	}
+	b, err := json.Marshal(u)
+	if err != nil {
+		// This should never happen
+		h.LogRequest(r, "fail: %s", err.Error())
+		h.httpError(w, "serialisation error", http.StatusInternalServerError)
+		return
+	}
+	h.LogRequest(r, "OK")
+	fmt.Fprint(w, string(b))
 }
 
 func (h *IdpHandler) HandleVerifyGET(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {

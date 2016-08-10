@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/boyvinall/hydra-idp-form/providers/form"
@@ -71,14 +71,27 @@ var (
 <head>
 </head>
 <body>
-Welcome {{.Username}}
-Your email is verified.
-<body>
+<p>Welcome {{.Email}}!</p>
+<p>You have successfully verified your email address.
+Please click <a href="{{.LoginURL}}">here</a> to manage your account.</p>
+</body>
 </html>`
 
-	verifytext = `Hi! {{.Username}}, visit {{.URL}} to verify!`
+	verifytext = `Hi there!,
 
-	verifyhtml = `Hi! {{.Username}}, click <a href={{.URL}}> here </a> to verify!`
+Please visit {{.URL}} to verify your email address.
+
+Thanks
+--
+This email was sent to {{.Email}}`
+
+	verifyhtml = `<p>Hi there!</p>
+<p></p>
+<p>Please click <a href={{.URL}}>here</a> to verify your email address.</p>
+<p></p>
+<p>Thanks</p>
+<hr>
+<small>This email was sent to {{.Email}}`
 )
 
 type Config struct {
@@ -351,6 +364,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "hydra-idp-form"
 	app.Usage = "Form-based IDP for Hydra"
+	app.Version = "0.0.1"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "hydra",
