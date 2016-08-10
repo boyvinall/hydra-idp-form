@@ -148,6 +148,7 @@ func (f *FormAuth) WriteVerify(w http.ResponseWriter, r *http.Request, userid st
 		"Email":     user.Email,
 	}
 
+	w.Header().Set("Cache-Control", "no-cache")
 	t := template.Must(template.New("tmpl").Parse(f.VerifyForm))
 	return t.Execute(w, data)
 }
@@ -175,6 +176,7 @@ func (f *FormAuth) WriteLoginPage(w http.ResponseWriter, r *http.Request, msg st
 		Msg:         msg,
 	}
 
+	w.Header().Set("Cache-Control", "no-cache")
 	t := template.Must(template.New("tmpl").Parse(f.LoginForm))
 	return t.Execute(w, context)
 }

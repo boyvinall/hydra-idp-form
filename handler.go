@@ -312,6 +312,7 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, _
 	user, err := p.Config.UserStore.GetWithID(id)
 
 	w.Header().Set("X-Subject", id)
+	w.Header().Set("Cache-Control", "no-cache")
 
 	// type Context struct {
 	// 	Subject       string    `json:"sub"`
