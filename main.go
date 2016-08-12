@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"strconv"
@@ -474,8 +475,17 @@ func main() {
 			Usage:  "SMTP connection details .. supports smtp// or smtps://, user:password@ and port specifier",
 			EnvVar: "SMTP_URL",
 		},
+		cli.BoolFlag{
+			Name:  "profile",
+			Usage: "expose profiling info in :6060/debug/pprof",
+		},
 	}
 	app.Action = func(c *cli.Context) {
+		if c.Bool("profile") {
+			go func() {
+				log.Println(http.ListenAndServe(":6060", nil))
+			}()
+		}
 		run(&Config{
 			hydraURL:        c.String("hydra"),
 			dbURL:           c.String("db"),

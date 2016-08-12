@@ -1,5 +1,5 @@
 hash: 4e48bd173e1452075149dcb0a79959d63ccbfafdb6736c6c2490326c32baf120
-updated: 2016-08-10T12:40:26.916870614+01:00
+updated: 2016-08-12T23:46:54.172151689+01:00
 imports:
 - name: github.com/asaskevich/govalidator
   version: 7664702784775e51966f0885f5cd27435916517b
@@ -47,7 +47,7 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/janekolszak/idp
-  version: 7e0702a7a0522a955098210776ff8f711886c417
+  version: 4b78d8c30c9c47921bbaf69174f3a50b6e3a2bf7
   repo: git@github.com:boyvinall/idp.git
   vcs: git
   subpackages:
@@ -181,7 +181,8 @@ imports:
   subpackages:
   - encoding
   - ql2
-  - types
+- name: gopkg.in/dancannon/gorethink.v2/types
+  version: 27d3045458910e2fc56025a0b52caaaa96414a26
 - name: gopkg.in/dgrijalva/jwt-go.v2
   version: 268038b363c7a8d7306b8e35bf77a1fde4b0c402
 - name: gopkg.in/fatih/pool.v2
