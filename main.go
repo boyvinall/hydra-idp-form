@@ -483,6 +483,7 @@ func main() {
 	app.Action = func(c *cli.Context) {
 		if c.Bool("profile") {
 			go func() {
+				// see https://github.com/uber/go-torch
 				log.Println(http.ListenAndServe(":6060", nil))
 			}()
 		}
