@@ -475,16 +475,19 @@ func main() {
 			Usage:  "SMTP connection details .. supports smtp// or smtps://, user:password@ and port specifier",
 			EnvVar: "SMTP_URL",
 		},
-		cli.BoolFlag{
-			Name:  "profile",
-			Usage: "expose profiling info in :6060/debug/pprof",
+		cli.StringFlag{
+			Name:   "pprof-bind",
+			Usage:  "[ip]:port to bind for http.DefaultServeMux, used to expose performance profiling info. The default (empty) means don't expose this.",
+			Value:  "",
+			EnvVar: "PPROF_BIND",
 		},
 	}
 	app.Action = func(c *cli.Context) {
-		if c.Bool("profile") {
+		pprofBind := c.String("pprof-bind")
+		if pprofBind != "" {
 			go func() {
 				// see https://github.com/uber/go-torch
-				log.Println(http.ListenAndServe(":6060", nil))
+				log.Println(http.ListenAndServe(pprofBind, nil))
 			}()
 		}
 		run(&Config{
