@@ -296,22 +296,28 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, _
 
 	w.Header().Set("Content-Type", "application/json")
 
+	var subject string
 	token := r.URL.Query().Get("token")
-	ctx := context.Background()
-	wardenctx, err := h.IDP.WardenAuthorized(ctx, token, "openid")
-	if err != nil {
-		h.LogRequest(r, "IDP.WardenAuthorized(): %s", err.Error())
-		h.httpError(w, "token denied or not found", http.StatusForbidden)
-		return
+	idToken := r.URL.Query().Get("id_token")
+	if token != "" {
+		ctx := context.Background()
+		wardenctx, err := h.IDP.WardenAuthorized(ctx, token, "openid")
+		if err != nil {
+			h.LogRequest(r, "IDP.WardenAuthorized(): %s", err.Error())
+			h.httpError(w, "token denied or not found", http.StatusForbidden)
+			return
+		}
+
+		h.LogRequest(r, r.URL.RawQuery)
+		subject = wardenctx.Subject
+	} else if idToken != "" {
+
 	}
 
-	h.LogRequest(r, r.URL.RawQuery)
-
-	id := wardenctx.Subject
 	p := h.Provider.(*form.FormAuth)
-	user, err := p.Config.UserStore.GetWithID(id)
+	user, err := p.Config.UserStore.GetWithID(subject)
 
-	w.Header().Set("X-Subject", id)
+	w.Header().Set("X-Subject", subject)
 	w.Header().Set("Cache-Control", "no-cache")
 
 	// type Context struct {
@@ -344,7 +350,7 @@ func (h *IdpHandler) HandleUserinfoGET(w http.ResponseWriter, r *http.Request, _
 		Username string `json:"username"`
 	}
 	u := userinfo{
-		ID:       id,
+		ID:       subject,
 		Email:    user.GetEmail(),
 		Username: user.GetUsername(),
 		Name:     strings.TrimSpace(fmt.Sprintf("%s %s", user.GetFirstName(), user.GetLastName())),
