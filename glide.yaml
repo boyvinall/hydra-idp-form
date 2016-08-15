@@ -3,7 +3,7 @@ import:
 - package: github.com/gorilla/sessions
 - package: github.com/janekolszak/idp
   version: dev
-  repo: git@github.com:boyvinall/idp.git
+  repo: https://github.com/boyvinall/idp.git
   vcs: git
   subpackages:
   - core
@@ -13,7 +13,7 @@ import:
   - userdb/memory
 - package: github.com/ory-am/hydra
   version: 0.2-stable
-  repo: git@github.com:boyvinall/hydra
+  repo: https://github.com/boyvinall/hydra.git
   vcs: git
   subpackages:
   - client

@@ -1,5 +1,5 @@
-hash: 4e48bd173e1452075149dcb0a79959d63ccbfafdb6736c6c2490326c32baf120
-updated: 2016-08-12T23:46:54.172151689+01:00
+hash: 57fb2bee15bbd54f26f39abf892e2c331ad59b438634f85a9cbca9d29043b4d1
+updated: 2016-08-15T23:38:13.474968191+01:00
 imports:
 - name: github.com/asaskevich/govalidator
   version: 7664702784775e51966f0885f5cd27435916517b
@@ -48,7 +48,7 @@ imports:
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/janekolszak/idp
   version: 4b78d8c30c9c47921bbaf69174f3a50b6e3a2bf7
-  repo: git@github.com:boyvinall/idp.git
+  repo: https://github.com/boyvinall/idp.git
   vcs: git
   subpackages:
   - core
@@ -91,8 +91,8 @@ imports:
   - token/hmac
   - rand
 - name: github.com/ory-am/hydra
-  version: 0195703e1ac603effae19e7c7738b182b0abda2d
-  repo: git@github.com:boyvinall/hydra
+  version: f1cfc1019d480f8b12d4ce0243e07ecf549bb5d7
+  repo: https://github.com/boyvinall/hydra.git
   vcs: git
   subpackages:
   - client
@@ -181,8 +181,7 @@ imports:
   subpackages:
   - encoding
   - ql2
-- name: gopkg.in/dancannon/gorethink.v2/types
-  version: 27d3045458910e2fc56025a0b52caaaa96414a26
+  - types
 - name: gopkg.in/dgrijalva/jwt-go.v2
   version: 268038b363c7a8d7306b8e35bf77a1fde4b0c402
 - name: gopkg.in/fatih/pool.v2
