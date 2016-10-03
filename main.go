@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/boyvinall/hydra-idp-form/providers/form"
+	"github.com/gravitational/version"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/boj/rethinkstore"
@@ -362,10 +363,11 @@ func run(cfg *Config) {
 }
 
 func main() {
+	v := version.Get()
 	app := cli.NewApp()
 	app.Name = "hydra-idp-form"
 	app.Usage = "Form-based IDP for Hydra"
-	app.Version = "0.0.1"
+	app.Version = fmt.Sprintf("%s git %s(%s)", v.Version, v.GitCommit, v.GitTreeState)
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "hydra",
@@ -481,8 +483,16 @@ func main() {
 			Value:  "",
 			EnvVar: "PPROF_BIND",
 		},
+		// cli.BoolFlag{
+		// 	Name:  "version",
+		// 	Usage: "Print version and exit",
+		// },
 	}
 	app.Action = func(c *cli.Context) {
+		// version.Print()
+		// if c.Bool("version") {
+		// 	os.Exit(0)
+		// }
 		pprofBind := c.String("pprof-bind")
 		if pprofBind != "" {
 			go func() {
