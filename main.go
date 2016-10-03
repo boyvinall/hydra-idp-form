@@ -119,7 +119,8 @@ type Config struct {
 }
 
 func run(cfg *Config) {
-	log.Println("Identity Provider started!")
+	v := version.Get()
+	log.Printf("Identity Provider started!  %s git %s(%s)", v.Version, v.GitCommit, v.GitTreeState)
 
 	// ===================================================
 	//   HTML/email Templates
@@ -483,16 +484,8 @@ func main() {
 			Value:  "",
 			EnvVar: "PPROF_BIND",
 		},
-		// cli.BoolFlag{
-		// 	Name:  "version",
-		// 	Usage: "Print version and exit",
-		// },
 	}
 	app.Action = func(c *cli.Context) {
-		// version.Print()
-		// if c.Bool("version") {
-		// 	os.Exit(0)
-		// }
 		pprofBind := c.String("pprof-bind")
 		if pprofBind != "" {
 			go func() {
